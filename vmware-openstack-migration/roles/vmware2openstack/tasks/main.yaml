@@ -1,0 +1,20 @@
+- name: Shutdown VM
+  ansible.builtin.include_tasks: 01_shutdown_vm.yaml
+
+- name: Ensure VM is on a vvols datastore
+  ansible.builtin.include_tasks: 02_svmotion_vm.yaml
+
+- name: Retrieve vvols mapping
+  ansible.builtin.include_tasks: 03_get_vm_vvols.yaml
+
+- name: Disconnect vvols from host
+  ansible.builtin.include_tasks: 04_disconnect_vvols.yaml
+
+- name: Transform original vvols list into openstack cinder suited for import
+  ansible.builtin.include_tasks: 05_transform_vvols_report_to_migration_data.yaml
+
+- name: Adopt vvols into Cinder
+  ansible.builtin.include_tasks: 06_cinder_manage.yaml
+
+- name: Create OpenStack instance
+  ansible.builtin.include_tasks: 07_create_openstack_instance.yaml
