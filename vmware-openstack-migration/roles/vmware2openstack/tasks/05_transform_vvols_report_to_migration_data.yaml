@@ -1,0 +1,30 @@
+- name: "Initialize the list for VMs ready for OpenStack migration"
+  ansible.builtin.set_fact:
+    _transformed_vvols_list: {}
+
+- name: "Transform VVol report into detailed migration data"
+  ansible.builtin.set_fact:
+    _transformed_vvols_list: "{{ vm_transformed_data }}"
+  vars:
+    _disks_list_for_vm: |
+      {%- set disks = [] -%}
+      {%- for vvol_name in vm_vvols.vvols -%}
+        {%- set disk_entry = {
+            'pure_storage_vvol_name': vvol_name,
+            'is_boot_disk': loop.first,
+            'label': 'disk-' ~ loop.index0
+          }
+        -%}
+        {%- set _ = disks.append(disk_entry) -%}
+      {%- endfor -%}
+      {{ disks }} 
+
+    vm_transformed_data: "{{ {'vm_name': vm_vvols.vm_name, 'disks': _disks_list_for_vm} }}"
+  when:
+    - vm_vvols.vvols is defined
+    - vm_vvols.vvols | length > 0
+    - vm_vvols.vm_name is defined
+
+- name: "Set global fact for vm_ready_for_openstack"
+  ansible.builtin.set_fact:
+    vm_ready_for_openstack: "{{ _transformed_vvols_list }}"
