@@ -1,0 +1,45 @@
+- name: "Create OpenStack instance booting from volume"
+  openstack.cloud.server:
+    auth:
+      auth_url: "{{ os_auth_url }}"
+      username: "{{ os_user }}"
+      password: "{{ os_password }}"
+      project_name: "{{ os_project }}"
+      domain_name: "{{ os_domain }}"
+    state: present
+    name: "{{ vm.os_instance_name }}"
+    flavor: "{{ vm.os_flavor | default(os_default_flavor) }}"
+    key_name: "{{ vm.os_keypair | default(os_default_keypair) }}"
+    nics:
+      - net-name: "{{ vm.os_network | default(os_default_network) }}"
+    security_groups: "{{ vm.os_security_groups | default(os_default_security_groups) }}"
+    boot_volume: "{{ _boot_volume_id }}" # ID of the volume marked as bootable
+    volumes: "{{ _other_volume_ids }}" # List of all Cinder volume IDs
+    wait: true
+    timeout: 600
+    # availability_zone: # Optional
+    # user_data: # Optional
+    # scheduler_hints: # Optional
+  vars:
+    # These variables are calculated for EACH 'item' in the loop.
+    _boot_volume_id: "{{ (cinder_disks | selectattr('cinder_volume_bootable', 'equalto', true)
+                      | selectattr('cinder_volume_id', 'defined')
+                      | selectattr('cinder_volume_id', '!=', 'CINDER_ID_NOT_AVAILABLE')
+                      | selectattr('cinder_volume_id', '!=', '')
+                      | map(attribute='cinder_volume_id')
+                      | first) | default(omit) }}"
+    _other_volume_ids: "{{ cinder_disks | selectattr('cinder_volume_id', 'defined')
+                     | selectattr('cinder_volume_bootable', 'equalto', false)
+                     | selectattr('cinder_volume_id', '!=', 'CINDER_ID_NOT_AVAILABLE')
+                     | selectattr('cinder_volume_id', '!=', '')
+                     | map(attribute='cinder_volume_id')
+                     | list }}"
+  when:
+    # Conditions to run this task
+    - cinder_disks is defined
+    - cinder_disks | length > 0
+    # Ensure a boot volume was identified
+    - _boot_volume_id
+    - _boot_volume_id != ""
+    - _other_volume_ids | length > 0
+  register: instance_creation_results_raw
