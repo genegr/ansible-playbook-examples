@@ -1,0 +1,17 @@
+- name: Ensure temporary VVol datastore is specified
+  ansible.builtin.assert:
+    that:
+      - temp_vvol_datastore_name is defined
+      - temp_vvol_datastore_name | length > 0
+    quiet: true
+
+- name: "Storage vMotion to VVol datastore"
+  community.vmware.vmware_vmotion:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: "{{ vcenter_validate_certs }}"
+    vm_name: "{{ vm.name }}"
+    destination_datastore: "{{ temp_vvol_datastore_name }}"
+  register: svmotion_results
+  when: vm.name is defined
