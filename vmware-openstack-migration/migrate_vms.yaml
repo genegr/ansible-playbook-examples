@@ -1,0 +1,17 @@
+- name: Migrate VMware VMs to OpenStack via Pure Storage VVols
+  hosts: localhost # Or your Ansible control node
+  gather_facts: false
+  vars_files:
+    - group_vars/all.yaml # Load common variables
+
+  tasks:
+    - ansible.builtin.include_role: 
+        name: vmware2openstack
+      loop: "{{ vms_to_migrate }}"
+      loop_control:
+        loop_var: vm
+
+    - name: Final migration summary
+      ansible.builtin.debug:
+        msg: "Migration process initiated for VMs. Check OpenStack for instance status."
+      when: vm_ready_for_openstack is defined and vm_ready_for_openstack | length > 0

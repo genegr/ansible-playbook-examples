@@ -1,0 +1,42 @@
+- name: "Adopt vvol volume into Cinder"
+  openstack.cloud.volume_manage:
+    auth:
+      auth_url: "{{ os_auth_url }}"
+      username: "{{ os_user }}"
+      password: "{{ os_password }}"
+      project_name: "{{ os_project }}"
+      domain_name: "{{ os_domain }}"
+    state: present
+    name: "{{ _cinder_volume_name }}"
+    host: "{{ cinder_manage_host_string }}"
+    source: "{{ disk.pure_storage_vvol_name }}"
+    id_type: "{{ cinder_volume_id_type }}"
+    bootable: "{{ disk.is_boot_disk | bool }}"
+    volume_type: "{{ cinder_volume_type | default(omit) }}"
+    description: "Migrated from VMware disk {{ disk.label }} for VM {{ vm.name }}"
+  vars:
+    _cinder_volume_name: "{{ vm.name }}-{{ disk.label }}"
+  register: import_result # Contains import_result.msg.volume.id
+  changed_when: import_result.changed | default(false)
+  failed_when: import_result.failed | default(false) # Let module control failure; task continues to set fact
+  when:
+    - disk.pure_storage_vvol_name is defined
+    - disk.pure_storage_vvol_name != ""
+
+- name: "Prepare updated disk object with Cinder ID" 
+  ansible.builtin.set_fact:
+    updated_disk_object_with_id: "{{ {
+                                       'cinder_volume_name': _cinder_volume_name,
+                                       'cinder_volume_id': _extracted_id,
+                                       'cinder_volume_bootable': disk.is_boot_disk | bool,
+                                       'cinder_manage_attempted': true,
+                                       'cinder_manage_changed': import_result.changed | default(false) if import_result.msg is defined else false,
+                                       'cinder_manage_failed': import_result.failed | default(false) if import_result.msg is defined else true
+                                     } }}"
+  vars:
+    _cinder_volume_name: "{{ vm.name }}-{{ disk.label }}"
+    _extracted_id: "{{ import_result.volume.id if import_result is defined and import_result.volume is defined and import_result.volume.id is defined and not (import_result.failed | default(false)) else 'CINDER_ID_NOT_AVAILABLE' }}"
+
+- name: "Register disk into VM variable"
+  ansible.builtin.set_fact:
+    cinder_disks: "{{ cinder_disks + [updated_disk_object_with_id] }}"

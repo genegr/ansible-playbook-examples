@@ -1,0 +1,10 @@
+- name: Disconnect vvol volume from host
+  purestorage.flasharray.purefa_host:
+    name: "{{ host.host }}"
+    volume: "{{ volume }}"
+    state: absent
+    fa_url:  "{{ pure_fa_url }}"
+    api_token: "{{ pure_fa_api_token }}"
+  loop: "{{ fa_volumes[volume].hosts }}"
+  loop_control:
+    loop_var: host

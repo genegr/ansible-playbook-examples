@@ -1,0 +1,45 @@
+- name: "Initialize vVols dictionary for VM"
+  ansible.builtin.set_fact:
+    # This list will store vVol details specifically for the CURRENT VM in this iteration
+    vm_vvols: {}
+
+- name: "Initialize vVol list"
+  ansible.builtin.set_fact:
+    # This list will store vVol details specifically for the CURRENT VM in this iteration
+    vvols: []
+
+- name: "Get VM disk information for VM from vCenter"
+  community.vmware.vmware_guest_disk_info:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: no # Set to yes in production
+    datacenter: "{{ datacenter }}"
+    name: "{{ vm.name }}"
+  delegate_to: localhost
+  register: vm_disk_info_result
+
+- name: "Iterate disks of VM and retrieve Pure Storage vVol info"
+  ansible.builtin.include_tasks: retrieve_pure_vvol.yaml
+  loop: "{{ vm_disk_info_result.guest_disk_info | dict2items }}"
+  loop_control:
+    loop_var: vm_disk_item # Renaming 'item' for clarity inside the inner loop
+    label: "Disk: {{ vm_disk_item.key }} - {{ vm_disk_item.value.backing_filename | default('N/A') }}"
+  vars:
+    _path_parts: "{{ vm_disk_item.value.backing_filename.split('/') }}"
+    _datastore_and_namespace_part: "{{ _path_parts[0] }}"
+    # These vars are defined for each disk iteration and passed to retrieve_pure_vvol.yaml
+    vvol_namespace_uuid: "{{ _datastore_and_namespace_part | regex_search('rfc4122\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') }}"
+    vvol_disk_name: "{{ _path_parts[1] }}"
+  when:
+    - vm_disk_info_result is defined
+    - not vm_disk_info_result.failed
+    - vm_disk_info_result.guest_disk_info is defined
+    - vm_disk_item.value.backing_filename is defined
+    - vm_disk_item.value.backing_filename is search("rfc4122\\.") # Only vVols
+    - (_datastore_and_namespace_part | regex_search('rfc4122\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')) is defined
+    - (_datastore_and_namespace_part | regex_search('rfc4122\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')) | length > 0
+
+- name: Assign vvol volumes for this VM to external variable
+  ansible.builtin.set_fact:
+    vm_vvols: "{{ {'vm_name': vm.name, 'vvols': vvols} }}"

@@ -1,0 +1,15 @@
+- name: collect volumes information
+  purestorage.flasharray.purefa_info:
+    gather_subset:
+      - volumes
+    fa_url: "{{ pure_fa_url }}"
+    api_token: "{{ pure_fa_api_token }}"
+  register: array_info
+
+- name: Iterate over vvols volumes to be disconnected
+  ansible.builtin.include_tasks: disconnect_vm_volume.yaml
+  vars: 
+    fa_volumes: "{{ array_info.purefa_info.volumes }}"
+  loop: "{{ vm_vvols.vvols }}"
+  loop_control:
+    loop_var: volume

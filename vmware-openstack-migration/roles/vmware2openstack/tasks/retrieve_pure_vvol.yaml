@@ -1,0 +1,141 @@
+- name: Get available API versions
+  ansible.builtin.uri:
+    url: "https://{{ pure_fa_url }}/api/api_version" # Assuming this is the correct path
+    method: GET
+    headers:
+      Content-Type: "application/json"
+    validate_certs: no # Equivalent to curl -k. Set to 'yes' in production.
+    return_content: yes # We need the response body
+    status_code: 200
+  register: api_version_response
+
+- name: Extract the latest API version
+  ansible.builtin.set_fact:
+    # response.json.version should be a list. [-1] gets the last element.
+    # The 'tr -d '"'' from curl/jq is usually not needed here as Ansible/Jinja2
+    # will give you the string value directly from the parsed JSON.
+    # If the API *actually* returns strings with embedded quotes like "\"2.18\"",
+    # then you might need: fetched_api_version: "{{ (api_version_response.json.version[-1]) | replace('\"', '') }}"
+    fetched_api_version: "{{ api_version_response.json.version[-1] }}"
+  when:
+    - api_version_response.json is defined
+    - api_version_response.json.version is defined
+    - api_version_response.json.version is iterable
+    - api_version_response.json.version | length > 0
+
+- name: Fail if API version could not be determined
+  ansible.builtin.fail:
+    msg: "Failed to determine the latest API version from {{ pure_fa_url }}."
+  when: fetched_api_version is not defined or fetched_api_version == ""
+
+- name: Login to Pure API and retrieve x-auth-token
+  ansible.builtin.uri:
+    url: "https://{{ pure_fa_url }}/api/{{ fetched_api_version }}/login" # Use fetched_api_version
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      api-token: "{{ pure_fa_api_token }}"
+    validate_certs: no
+    status_code: 200
+  register: pure_login_response
+  # no_log: true # If pure_fa_api_token is sensitive
+
+- name: Extract session token (x-auth-token)
+  ansible.builtin.set_fact:
+    session_auth_token: "{{ pure_login_response.x_auth_token }}"
+  when: pure_login_response.x_auth_token
+
+- name: Fail if session token was not retrieved
+  ansible.builtin.fail:
+    msg: "Failed to retrieve x-auth-token from login response."
+  when: session_auth_token is not defined or session_auth_token == ""
+
+- name: Get vvols for the given VMW_VVolNamespace
+  vars:
+    # Construct the filter string
+    api_filter_value: "tags('vasa-integration.purestorage.com','VMW_VVolNamespace')='*{{ vvol_namespace_uuid }}'"
+  ansible.builtin.uri:
+    url: "https://{{ pure_fa_url }}/api/{{ fetched_api_version }}/volumes?filter={{ api_filter_value | urlencode }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      x-auth-token: "{{ session_auth_token }}"
+    validate_certs: no
+    return_content: yes
+    status_code: 200
+  register: pure_volumes_response_1
+
+- name: Get vvols for the given VMW_VVolName
+  vars:
+    # Construct the filter string
+    api_filter_value: "tags('vasa-integration.purestorage.com','VMW_VVolName')='*{{ vvol_disk_name }}'"
+  ansible.builtin.uri:
+    url: "https://{{ pure_fa_url }}/api/{{ fetched_api_version }}/volumes?filter={{ api_filter_value | urlencode }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      x-auth-token: "{{ session_auth_token }}"
+    validate_certs: no
+    return_content: yes
+    status_code: 200
+  register: pure_volumes_response_2
+
+- name: Parse dictionary to JSON string
+  set_fact:
+    json_data_1: "{{ pure_volumes_response_1.json | to_json }}"
+
+- name: replace 'items' key, then parse back  #This is necessary to overcome the the issue with the python built-in 'items'
+  ansible.builtin.set_fact:
+    dict1_prepared_str_op: >-
+      {{ json_data_1.replace('"items":', '"elements":') | from_json }}
+
+
+- name: Parse dictionary to JSON string
+  set_fact:
+    json_data_2: "{{ pure_volumes_response_2.json | to_json }}"
+
+- name: replace 'items' key, then parse back
+  ansible.builtin.set_fact:
+    dict2_prepared_str_op: >-
+      {{ json_data_2.replace('"items":', '"elements":') | from_json }}
+
+- name: Extract 'items' lists
+  ansible.builtin.set_fact:
+    items_from_dict1: "{{ dict1_prepared_str_op.elements | default([]) }}"
+    items_from_dict2: "{{ dict2_prepared_str_op.elements | default([]) }}"
+
+# For efficient lookup, convert the second list of items into a dictionary keyed by 'id'
+# This is more efficient than repeatedly iterating through items_from_dict2 for each item in items_from_dict1
+- name: Index items from dict2 by their ID
+  ansible.builtin.set_fact:
+    items2_indexed_by_id: "{{ dict(items_from_dict2 | map(attribute='id') | zip(items_from_dict2)) }}"
+
+- name: Initialize list for paired items
+  ansible.builtin.set_fact:
+    paired_items_result: []
+
+- name: Pair items based on ID
+  ansible.builtin.set_fact:
+    paired_items_result: >-
+      {{ paired_items_result +
+         [
+           {
+             'id': item1.id,
+             'item_from_dict1': item1,
+             'item_from_dict2': items2_indexed_by_id[item1.id]
+           }
+         ]
+      }}
+  loop: "{{ items_from_dict1 }}"
+  loop_control:
+    loop_var: item1
+    label: "{{ item1.name }}"
+  when: item1.id is defined and item1.id in items2_indexed_by_id # Ensure ID exists in both
+
+    #- name: Get vvol volume
+    #  ansible.builtin.set_fact:
+    #    vvol_volume_name: "{{ paired_items_result[0].item_from_dict1.name }}"
+
+- name: Add vvol to external accumulator
+  ansible.builtin.set_fact:
+    vvols: "{{ vvols + [paired_items_result[0].item_from_dict1.name] }}"
