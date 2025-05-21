@@ -1,0 +1,16 @@
+- name: Ensure Cinder management parameters are set
+  ansible.builtin.assert:
+    that:
+      - cinder_manage_host_string is defined
+      - cinder_volume_id_type is defined
+    quiet: true
+
+- name: Intialize global variable to store cinder disks for this VM
+  ansible.builtin.set_fact:
+    cinder_disks: []
+
+- name: "Iterate through disks of VM to manage into Cinder"
+  ansible.builtin.include_tasks: manage_single_disk.yaml
+  loop: "{{ vm_ready_for_openstack.disks }}"
+  loop_control:
+    loop_var: disk
