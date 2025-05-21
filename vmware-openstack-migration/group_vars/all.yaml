@@ -1,0 +1,36 @@
+# VMware vCenter Configuration
+vcenter_hostname: "vcsa.example.com"
+vcenter_username: "administrator@example.com"
+vcenter_password: "xyadscewew" # Use Ansible Vault!
+vcenter_validate_certs: false # Set to true in production with proper certs
+datacenter: "My-Datacenter" # Datacenter name, used for vmware_guest_disk_info
+
+# Pure Storage FlashArray API details
+pure_fa_url: "my-fa01"
+pure_fa_api_token: "b5cb29e7-a93c-b40a-b02f-da2b90c8c65e"  # Use Ansible Vault for production
+
+# Pure Storage & OpenStack Cinder Configuration
+temp_vvol_datastore_name: "temp-vvols01"
+cinder_manage_host_string: "cinder-host01@myfa01#my-fa1" # e.g., "cinder-host@pure-iscsi#PureArray1-Pool"
+cinder_volume_id_type: "source-name" # For Pure, typically 'source-name' refers to the volume name on the array
+cinder_volume_type: "fa-1" # Optional: specify a Cinder volume type
+
+# OpenStack Instance Configuration
+os_auth_url: https://openstack.example.com/identity
+os_user: "admin"
+os_password: "secret" # Use Ansible Vault!
+os_project: "admin"
+os_domain: "default"
+os_cloud: "openstack"
+os_default_flavor: "m1.small"
+os_default_network: "public"
+os_default_keypair: "my-ssh-key"
+os_default_security_groups: ["default"]
+
+vms_to_migrate:
+  - name: "rh9-srv01"
+    os_instance_name: "rh9-srv01"
+  - name: "win22-01"
+    os_instance_name: "win22-01"
+  - name: "ubuntu24-srv01"
+    os_instance_name: "ubuntu24-srv01"
