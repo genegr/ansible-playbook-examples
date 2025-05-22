@@ -8,16 +8,48 @@ The utility consists of a single role, in turn made of small tasks meant to be e
 
 ## Required modules
 
-In order to use the utility it is necessary to install all the required Python libraries for Community.Vmware,  
+In order to use the utility it is necessary to install all the required Python libraries for Community.Vmware, Purestorage.Flasharray and Openstack.Cloud ansible collections. Please refer to the documentation of each of those collection on how to procede with the installation of the related libraries.
+
 ## Usage
 The Ansible `inventory.ini` inventory file contains a single entry (localhost) and should not need to be changed.
-All the involved variables are defined in the `group_vars/all.yaml` file:
+
+The execution merely entails running the ansible playbook:
+`% ansible-playbook -i inventory.ini migrate_vms.yaml`
+
+All the involved variables are defined in the `group_vars/all.yaml` file.
+
+### Variables
 
 | Variable name | Description |
 |--|--|
 |vcenter_hostname| vcenter hostname/ip address|
 |vcenter_username| vcenter account name |
-|vcenter_username| vcenter account password (use vault in real use cases)|
+|vcenter_username| vcenter account password (Use Ansible Vault in a real use case)|
 |vcenter_validate_certs| disable/enable vcenter certificate checking |
 |datacenter| datacenter where the VMs are located |
 |pure_fa_url| FlashArray management endpoint |
+|temp_vvol_datastore_name| temporary vVol datastore. Make sure it is created into a FlashArray unstretched storage container (Pod)| 
+|cinder_host_string| Cinder host, canonical format, e.g., "cinder-host@pure-iscsi#PureArray1-Pool"|
+|cinder_volume_id_type| Cinder volume ID type. The defaul value, 'source-name' instructs Cinder to use the volume name on the array as the lookup parameter|
+|cinder_volume_type| Cinder volume type|
+|os_auth_url| OpenStack identity endpoint|
+|os_user|OpenStack user account|
+|os_password| OpenStack user password (Use Ansible Vault in a real use case)|
+|os_project| OpenStack project|
+|os_domain| OpenStack domain|
+|os_cloud| OpenStack cloud|
+|os_default_flavor| OpenStack default flavor|
+|os_default_network| OpenStack default network|
+|os_default_keypair| OpenStack default ssh keypair|
+|os_default_security_groups| OpenStack default security groups|
+|vms_to_migrate| List of virtual machines to be migrated|
+
+### Virtual Machine format
+|Variable name| Description|
+|--|--|
+|name| vsphere VM name|
+|os_instance_name| OpenStack VM name|
+|os_flavor| OpenStack VM flavor|
+|os_network| OpenStack VM network|
+|os_keypair| OpenStack VM keypair|
+|os_security_group|OpenStack VM Security group|
