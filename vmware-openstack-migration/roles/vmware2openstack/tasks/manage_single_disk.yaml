@@ -9,7 +9,7 @@
     state: present
     name: "{{ _cinder_volume_name }}"
     host: "{{ cinder_manage_host_string }}"
-    source: "{{ disk.pure_storage_vvol_name }}"
+    source_name: "{{ disk.pure_storage_vvol_name }}"
     id_type: "{{ cinder_volume_id_type }}"
     bootable: "{{ disk.is_boot_disk | bool }}"
     volume_type: "{{ cinder_volume_type | default(omit) }}"
